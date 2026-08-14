@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>판서 프로그램</title>
+  <!-- PDF.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: #f5f5f7;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    /* 상단 툴바 */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background-color: #ffffff;
+      border-bottom: 1px solid #e0e0e0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      z-index: 10;
+      flex-wrap: wrap;
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .divider {
+      width: 1px;
+      height: 24px;
+      background-color: #e0e0e0;
+      margin: 0 2px;
+    }
+
+    label {
+      font-size: 13px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .color-palette {
+      display: flex;
+      gap: 4px;
+    }
+
+    .color-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.1s, border-color 0.2s;
+    }
+
+    .color-btn:hover:not(.active) {
+      transform: scale(1.1);
+    }
+
+    .color-btn.active {
+      border-color: #333;
+      transform: scale(1.1);
+    }
+
+    .color-btn[data-color="#ffffff"] {
+      border-color: #e0e0e0;
+    }
+
+    button.tool-select-btn, button.history-btn, button.clear-btn, button.pdf-btn, button.zoom-btn, button.wb-toggle-btn {
+      padding: 6px 12px;
+      background-color: #f0f0f2;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button.tool-select-btn:hover:not(:disabled), 
+    button.history-btn:hover:not(:disabled), 
+    button.pdf-btn:hover:not(:disabled),
+    button.zoom-btn:hover:not(:disabled),
+    button.wb-toggle-btn:hover {
+      background-color: #e4e4e8;
+    }
+
+    button.tool-select-btn.active {
+      background-color: #007aff;
+      color: white;
+      border-color: #007aff;
+    }
+
+    button.wb-toggle-btn {
+      background-color: #5856d6;
+      color: white;
+      border: none;
+      font-weight: bold;
+    }
+    button.wb-toggle-btn:hover {
+      background-color: #4745b4;
+    }
+    button.wb-toggle-btn.active {
+      background-color: #34c759;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    button.clear-btn {
+      background-color: #ff3b30;
+      color: white;
+      border: none;
+    }
+
+    button.clear-btn:hover {
+      background-color: #d70015;
+    }
+
+    .file-label {
+      padding: 6px 12px;
+      background-color: #34c759;
+      color: white;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .file-label:hover {
+      background-color: #28a745;
+    }
+    #pdfInput {
+      display: none;
+    }
+
+    .page-input-container {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .page-input-container input {
+      width: 56px;
+      padding: 4px 4px;
+      text-align: center;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    .zoom-text {
+      font-size: 12px;
+      font-weight: bold;
+      color: #555;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .sidebar {
+      width: 180px;
+      background-color: #e5e5ea;
+      border-right: 1px solid #d1d1d6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 8px;
+      gap: 12px;
+      overflow-y: auto;
+    }
+
+    .sidebar-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      align-self: flex-start;
+      margin-left: 4px;
+    }
+
+    .thumbnail-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      gap: 4px;
+      padding: 6px;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+      width: 100%;
+    }
+
+    .thumbnail-item:hover {
+      background-color: #d1d1d6;
+    }
+
+    .thumbnail-item.active {
+      background-color: #c7c7cc;
+      outline: 2px solid #007aff;
+    }
+
+    .thumbnail-item canvas {
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      background-color: #fff;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .thumbnail-page-num {
+      font-size: 11px;
+      color: #444;
+      font-weight: 600;
+    }
+
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 10px 0;
+      background-color: #8e8e93;
+    }
+
+    .canvas-container.panning {
+      cursor: grab !important;
+    }
+    .canvas-container.panning:active {
+      cursor: grabbing !important;
+    }
+
+    #pdfCanvas {
+      position: absolute;
+      z-index: 1;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    #paintCanvas {
+      position: absolute;
+      z-index: 2;
+      cursor: crosshair;
+    }
+
+    .whiteboard-container {
+      display: none;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff;
+      position: relative;
+      cursor: crosshair;
+    }
+
+    .whiteboard-container.active {
+      display: block;
+    }
+
+    #whiteboardCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 툴바 -->
+  <div class="toolbar">
+    <div class="tool-group" id="pdfControls">
+      <label for="pdfInput" class="file-label">📄 파일 바꾸기</label>
+      <input type="file" id="pdfInput" accept="application/pdf">
+      <button id="prevPageBtn" class="pdf-btn" disabled>◀</button>
+      
+      <div class="page-input-container">
+        <input type="number" id="pageDirectInput" min="1" value="1" disabled>
+        <span>/ <span id="pageCount">0</span></span>
+      </div>
+      
+      <button id="nextPageBtn" class="pdf-btn" disabled>▶</button>
+    </div>
+
+    <div class="divider" id="pdfDivider1"></div>
+
+    <div class="tool-group" id="zoomControls">
+      <button id="zoomOutBtn" class="zoom-btn" disabled>🔍 -</button>
+      <span id="zoomVal" class="zoom-text">100%</span>
+      <button id="zoomInBtn" class="zoom-btn" disabled>🔍 +</button>
+      <button id="zoomResetBtn" class="zoom-btn" disabled>가로맞춤</button>
+    </div>
+
+    <div class="divider" id="pdfDivider2"></div>
+
+    <div class="tool-group">
+      <button id="wbToggleBtn" class="wb-toggle-btn">📋 화이트보드 전환</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="tool-group">
+      <button id="penBtn" class="tool-select-btn active">✏️ 펜</button>
+      <button id="highlighterBtn" class="tool-select-btn">🖍️ 형광펜</button>
+      <button id="eraserBtn" class="tool-select-btn">🧹 지우개</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="tool-group">
+      <div class="color-palette">
+        <button class="color-btn" data-color="#ffffff" style="background-color: #ffffff;"></button>
+        <button class="color-btn active" data-color="#000000" style="background-color: #000000;"></button>
+        <button class="color-btn" data-color="#ff3b30" style="background-color: #ff3b30;"></button>
+        <button class="color-btn" data-color="#007aff" style="background-color: #007aff;"></button>
+        <button class="color-btn" data-color="#ffcc00" style="background-color: #ffcc00;"></button>
+        <button class="color-btn" data-color="#4cd964" style="background-color: #4cd964;"></button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="tool-group">
+      <button class="size-btn tool-select-btn" data-size="3">3px</button>
+      <button class="size-btn tool-select-btn active" data-size="5">5px</button>
+      <button class="size-btn tool-select-btn" data-size="10">10px</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="tool-group">
+      <button id="undoBtn" class="history-btn" disabled>↩️ Undo</button>
+      <button id="redoBtn" class="history-btn" disabled>↪️ Redo</button>
+      <button id="clearBtn" class="clear-btn">전체 지우기</button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <div class="sidebar" id="sidebar">
+      <span class="sidebar-title">미리보기</span>
+    </div>
+
+    <div class="canvas-container" id="canvasContainer">
+      <canvas id="pdfCanvas"></canvas>
+      <canvas id="paintCanvas"></canvas>
+    </div>
+
+    <div class="whiteboard-container" id="whiteboardContainer">
+      <canvas id="whiteboardCanvas"></canvas>
+    </div>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // 💡 [설정] 자동으로 불러올 한글 PDF 파일명 (같은 폴더에 위치한 파일명 지정)
+    const DEFAULT_PDF_URL = '중학_정보_교과서.pdf'; 
+
+    const paintCanvas = document.getElementById('paintCanvas');
+    const ctx = paintCanvas.getContext('2d');
+    const pdfCanvas = document.getElementById('pdfCanvas');
+    const pdfCtx = pdfCanvas.getContext('2d');
+    const container = document.getElementById('canvasContainer');
+    const sidebar = document.getElementById('sidebar');
+
+    const wbContainer = document.getElementById('whiteboardContainer');
+    const wbCanvas = document.getElementById('whiteboardCanvas');
+    const wbCtx = wbCanvas.getContext('2d');
+    const wbToggleBtn = document.getElementById('wbToggleBtn');
+
+    const pdfControls = document.getElementById('pdfControls');
+    const zoomControls = document.getElementById('zoomControls');
+    const pdfDivider1 = document.getElementById('pdfDivider1');
+    const pdfDivider2 = document.getElementById('pdfDivider2');
+
+    const pdfInput = document.getElementById('pdfInput');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const pageDirectInput = document.getElementById('pageDirectInput');
+    const pageCountSpan = document.getElementById('pageCount');
+
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    const zoomVal = document.getElementById('zoomVal');
+
+    const penBtn = document.getElementById('penBtn');
+    const highlighterBtn = document.getElementById('highlighterBtn');
+    const eraserBtn = document.getElementById('eraserBtn');
+    const colorBtns = document.querySelectorAll('.color-btn');
+    const sizeBtns = document.querySelectorAll('.size-btn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    let currentMode = 'pdf'; 
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+
+    let userScale = 1.0;
+    const MIN_SCALE = 0.5;
+    const MAX_SCALE = 3.0;
+
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+
+    let isDrawing = false;
+    let currentTool = 'pen'; 
+    let currentColor = '#000000';
+    let currentLineWidth = 5;
+    let lastX = 0, lastY = 0;
+
+    let isPanning = false;
+    let isSpacePressed = false;
+    let panStartX = 0, panStartY = 0;
+    let scrollLeftStart = 0, scrollTopStart = 0;
+
+    const MAX_HISTORY = 20;
+
+    let pdfUndoStack = [];
+    let pdfRedoStack = [];
+    let wbUndoStack = [];
+    let wbRedoStack = [];
+
+    const HIGHLIGHTER_ALPHA = 0.4;
+
+    function getActiveContext() {
+      if (currentMode === 'whiteboard') {
+        return {
+          canvas: wbCanvas,
+          ctx: wbCtx,
+          undoStack: wbUndoStack,
+          redoStack: wbRedoStack
+        };
+      } else {
+        return {
+          canvas: paintCanvas,
+          ctx: ctx,
+          undoStack: pdfUndoStack,
+          redoStack: pdfRedoStack
+        };
+      }
+    }
+
+    function saveState() {
+      const active = getActiveContext();
+      if (active.undoStack.length >= MAX_HISTORY) active.undoStack.shift();
+      active.undoStack.push(active.ctx.getImageData(0, 0, active.canvas.width, active.canvas.height));
+      active.redoStack.length = 0;
+      updateHistoryButtons();
+    }
+
+    function updateHistoryButtons() {
+      const active = getActiveContext();
+      undoBtn.disabled = active.undoStack.length <= 1;
+      redoBtn.disabled = active.redoStack.length === 0;
+    }
+
+    // --- 한글 URL 지원 자동 로드 함수 ---
+    // 기존 loadPdfFromUrl 함수를 아래 코드로 교체해 보세요.
+  function loadPdfFromUrl(url) {
+  // 파일 경로와 한글 파일명을 안전하게 분리하여 인코딩
+    const parts = url.split('/');
+    const filename = parts.pop();
+    const encodedUrl = parts.join('/') + (parts.length ? '/' : '') + encodeURIComponent(filename);
+
+    pdfjsLib.getDocument(encodedUrl).promise.then((pdfDoc_) => {
+    pdfDoc = pdfDoc_;
+    pageCountSpan.textContent = pdfDoc.numPages;
+    pageDirectInput.max = pdfDoc.numPages;
+    pageDirectInput.disabled = false;
+    
+    userScale = 1.0;
+    pageNum = 1;
+    renderPage(pageNum);
+    generateThumbnails();
+  }).catch((error) => {
+    console.error("PDF 로드 실패 상세 원인:", error);
+    alert(`[${url}] 파일을 불러올 수 없습니다.\n개발자 도구(F12) 콘솔(Console)창을 확인해 주세요.`);
+  });
+}
+
+    function toggleMode() {
+      if (currentMode === 'pdf') {
+        currentMode = 'whiteboard';
+        wbToggleBtn.textContent = '📄 PDF 화면으로';
+        wbToggleBtn.classList.add('active');
+
+        sidebar.style.display = 'none';
+        container.style.display = 'none';
+        pdfControls.style.display = 'none';
+        zoomControls.style.display = 'none';
+        pdfDivider1.style.display = 'none';
+        pdfDivider2.style.display = 'none';
+
+        wbContainer.classList.add('active');
+        resizeWhiteboardCanvas();
+
+      } else {
+        currentMode = 'pdf';
+        wbToggleBtn.textContent = '📋 화이트보드 전환';
+        wbToggleBtn.classList.remove('active');
+
+        sidebar.style.display = 'flex';
+        container.style.display = 'flex';
+        pdfControls.style.display = 'flex';
+        zoomControls.style.display = 'flex';
+        pdfDivider1.style.display = 'block';
+        pdfDivider2.style.display = 'block';
+
+        wbContainer.classList.remove('active');
+      }
+
+      updateHistoryButtons();
+    }
+
+    function resizeWhiteboardCanvas() {
+      if (wbCanvas.width !== wbContainer.clientWidth || wbCanvas.height !== wbContainer.clientHeight) {
+        wbCanvas.width = wbContainer.clientWidth;
+        wbCanvas.height = wbContainer.clientHeight;
+        
+        wbCtx.fillStyle = '#ffffff';
+        wbCtx.fillRect(0, 0, wbCanvas.width, wbCanvas.height);
+
+        if (wbUndoStack.length > 0) {
+          wbCtx.putImageData(wbUndoStack[wbUndoStack.length - 1], 0, 0);
+        }
+      }
+    }
+
+    wbToggleBtn.addEventListener('click', toggleMode);
+
+    function renderPage(num) {
+      pageRendering = true;
+
+      pdfDoc.getPage(num).then((page) => {
+        const containerWidth = container.clientWidth - 16;
+        const unscaledViewport = page.getViewport({ scale: 1.0 });
+
+        const widthFitScale = containerWidth / unscaledViewport.width;
+        const finalScale = widthFitScale * userScale;
+
+        const viewport = page.getViewport({ scale: finalScale });
+
+        pdfCanvas.width = viewport.width;
+        pdfCanvas.height = viewport.height;
+        paintCanvas.width = viewport.width;
+        paintCanvas.height = viewport.height;
+        tempCanvas.width = viewport.width;
+        tempCanvas.height = viewport.height;
+
+        const renderContext = {
+          canvasContext: pdfCtx,
+          viewport: viewport
+        };
+        const renderTask = page.render(renderContext);
+
+        renderTask.promise.then(() => {
+          pageRendering = false;
+          if (pageNumPending !== null) {
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      });
+
+      pageDirectInput.value = num;
+      pdfUndoStack = [];
+      pdfRedoStack = [];
+      saveState();
+      updatePageUI();
+
+      container.scrollTop = 0;
+    }
+
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    async function generateThumbnails() {
+      sidebar.innerHTML = '<span class="sidebar-title">미리보기</span>';
+
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: 0.2 });
+
+        const thumbItem = document.createElement('div');
+        thumbItem.className = `thumbnail-item ${i === pageNum ? 'active' : ''}`;
+        thumbItem.dataset.pageNum = i;
+
+        const thumbCanvas = document.createElement('canvas');
+        const thumbCtx = thumbCanvas.getContext('2d');
+        thumbCanvas.width = viewport.width;
+        thumbCanvas.height = viewport.height;
+
+        const renderContext = {
+          canvasContext: thumbCtx,
+          viewport: viewport
+        };
+        await page.render(renderContext).promise;
+
+        const label = document.createElement('span');
+        label.className = 'thumbnail-page-num';
+        label.textContent = `${i}p`;
+
+        thumbItem.appendChild(thumbCanvas);
+        thumbItem.appendChild(label);
+
+        thumbItem.addEventListener('click', () => {
+          if (pageNum !== i) {
+            pageNum = i;
+            queueRenderPage(pageNum);
+          }
+        });
+
+        sidebar.appendChild(thumbItem);
+      }
+    }
+
+    function updatePageUI() {
+      const hasPDF = !!pdfDoc;
+      prevPageBtn.disabled = !hasPDF || pageNum <= 1;
+      nextPageBtn.disabled = !hasPDF || pageNum >= pdfDoc.numPages;
+      
+      zoomInBtn.disabled = !hasPDF || userScale >= MAX_SCALE;
+      zoomOutBtn.disabled = !hasPDF || userScale <= MIN_SCALE;
+      zoomResetBtn.disabled = !hasPDF;
+      zoomVal.textContent = `${Math.round(userScale * 100)}%`;
+
+      document.querySelectorAll('.thumbnail-item').forEach(item => {
+        const pNum = parseInt(item.dataset.pageNum, 10);
+        if (pNum === pageNum) {
+          item.classList.add('active');
+          item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    zoomInBtn.addEventListener('click', () => {
+      if (userScale < MAX_SCALE) {
+        userScale = Math.min(MAX_SCALE, userScale + 0.2);
+        queueRenderPage(pageNum);
+      }
+    });
+
+    zoomOutBtn.addEventListener('click', () => {
+      if (userScale > MIN_SCALE) {
+        userScale = Math.max(MIN_SCALE, userScale - 0.2);
+        queueRenderPage(pageNum);
+      }
+    });
+
+    zoomResetBtn.addEventListener('click', () => {
+      userScale = 1.0;
+      queueRenderPage(pageNum);
+    });
+
+    // 수동 파일 선택 시
+    pdfInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && file.type === 'application/pdf') {
+        const fileReader = new FileReader();
+        fileReader.onload = function() {
+          const typedarray = new Uint8Array(this.result);
+          pdfjsLib.getDocument(typedarray).promise.then((pdfDoc_) => {
+            pdfDoc = pdfDoc_;
+            pageCountSpan.textContent = pdfDoc.numPages;
+            pageDirectInput.max = pdfDoc.numPages;
+            pageDirectInput.disabled = false;
+            
+            userScale = 1.0;
+            pageNum = 1;
+            renderPage(pageNum);
+            generateThumbnails();
+          });
+        };
+        fileReader.readAsArrayBuffer(file);
+      }
+    });
+
+    prevPageBtn.addEventListener('click', () => {
+      if (pageNum > 1) {
+        pageNum--;
+        queueRenderPage(pageNum);
+      }
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+      if (pageNum < pdfDoc.numPages) {
+        pageNum++;
+        queueRenderPage(pageNum);
+      }
+    });
+
+    function handleDirectPageInput() {
+      if (!pdfDoc) return;
+      let targetPage = parseInt(pageDirectInput.value, 10);
+      
+      if (isNaN(targetPage) || targetPage < 1) {
+        targetPage = 1;
+      } else if (targetPage > pdfDoc.numPages) {
+        targetPage = pdfDoc.numPages;
+      }
+      
+      pageNum = targetPage;
+      queueRenderPage(pageNum);
+    }
+
+    pageDirectInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleDirectPageInput();
+    });
+    pageDirectInput.addEventListener('blur', handleDirectPageInput);
+
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (currentMode === 'whiteboard') {
+          resizeWhiteboardCanvas();
+        } else if (pdfDoc) {
+          queueRenderPage(pageNum);
+        } else {
+          initCanvasSize();
+        }
+      }, 200);
+    });
+
+    container.addEventListener('wheel', (e) => {
+      if (!pdfDoc || currentMode === 'whiteboard') return;
+
+      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 2;
+      const isAtTop = container.scrollTop <= 0;
+
+      if (isAtBottom && e.deltaY > 0) {
+        if (pageNum < pdfDoc.numPages) {
+          pageNum++;
+          queueRenderPage(pageNum);
+        }
+      } else if (isAtTop && e.deltaY < 0) {
+        if (pageNum > 1) {
+          pageNum--;
+          queueRenderPage(pageNum);
+          setTimeout(() => {
+            container.scrollTop = container.scrollHeight - container.clientHeight;
+          }, 100);
+        }
+      }
+    }, { passive: true });
+
+
+    // --- 통합 판서 로직 ---
+
+    paintCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    wbCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    function startDrawing(e) {
+      if (currentMode === 'pdf' && (e.button === 2 || isSpacePressed)) {
+        isPanning = true;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        scrollLeftStart = container.scrollLeft;
+        scrollTopStart = container.scrollTop;
+        container.classList.add('panning');
+        return;
+      }
+
+      isDrawing = true;
+      const { x, y } = getCoordinates(e);
+      lastX = x;
+      lastY = y;
+
+      if (currentTool === 'highlighter') {
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.strokeStyle = currentColor;
+        tempCtx.lineWidth = currentLineWidth * 2.5;
+        tempCtx.lineCap = 'round';
+        tempCtx.lineJoin = 'round';
+        tempCtx.globalAlpha = 1.0;
+      }
+    }
+
+    function draw(e) {
+      if (isPanning) {
+        const dx = e.clientX - panStartX;
+        const dy = e.clientY - panStartY;
+        container.scrollLeft = scrollLeftStart - dx;
+        container.scrollTop = scrollTopStart - dy;
+        return;
+      }
+
+      if (!isDrawing) return;
+      const { x, y } = getCoordinates(e);
+      const active = getActiveContext();
+
+      if (currentTool === 'highlighter') {
+        tempCtx.beginPath();
+        tempCtx.moveTo(lastX, lastY);
+        tempCtx.lineTo(x, y);
+        tempCtx.stroke();
+
+        if (active.undoStack.length > 0) {
+          active.ctx.putImageData(active.undoStack[active.undoStack.length - 1], 0, 0);
+        } else {
+          active.ctx.clearRect(0, 0, active.canvas.width, active.canvas.height);
+        }
+
+        active.ctx.save();
+        active.ctx.globalAlpha = HIGHLIGHTER_ALPHA;
+        active.ctx.drawImage(tempCanvas, 0, 0);
+        active.ctx.restore();
+
+      } else if (currentTool === 'eraser') {
+        if (currentMode === 'whiteboard') {
+          active.ctx.globalCompositeOperation = 'source-over';
+          active.ctx.strokeStyle = '#ffffff';
+        } else {
+          active.ctx.globalCompositeOperation = 'destination-out';
+        }
+        active.ctx.lineWidth = currentLineWidth * 2.5;
+        active.ctx.lineCap = 'round';
+        active.ctx.lineJoin = 'round';
+        active.ctx.beginPath();
+        active.ctx.moveTo(lastX, lastY);
+        active.ctx.lineTo(x, y);
+        active.ctx.stroke();
+
+      } else {
+        active.ctx.globalCompositeOperation = 'source-over';
+        active.ctx.strokeStyle = currentColor;
+        active.ctx.lineWidth = currentLineWidth;
+        active.ctx.lineCap = 'round';
+        active.ctx.lineJoin = 'round';
+        active.ctx.globalAlpha = 1.0;
+        active.ctx.beginPath();
+        active.ctx.moveTo(lastX, lastY);
+        active.ctx.lineTo(x, y);
+        active.ctx.stroke();
+      }
+
+      lastX = x;
+      lastY = y;
+    }
+
+    function stopDrawing() {
+      if (isPanning) {
+        const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 2;
+        if (isAtBottom && pdfDoc && pageNum < pdfDoc.numPages) {
+          pageNum++;
+          queueRenderPage(pageNum);
+        }
+
+        isPanning = false;
+        container.classList.remove('panning');
+      }
+
+      if (isDrawing) {
+        isDrawing = false;
+        const active = getActiveContext();
+        active.ctx.beginPath();
+        tempCtx.beginPath();
+        saveState();
+      }
+    }
+
+    function getCoordinates(e) {
+      const active = getActiveContext();
+      const rect = active.canvas.getBoundingClientRect();
+      let clientX, clientY;
+
+      if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    function undo() {
+      const active = getActiveContext();
+      if (active.undoStack.length > 1) {
+        active.redoStack.push(active.undoStack.pop());
+        const previousState = active.undoStack[active.undoStack.length - 1];
+        active.ctx.putImageData(previousState, 0, 0);
+        updateHistoryButtons();
+      }
+    }
+
+    function redo() {
+      const active = getActiveContext();
+      if (active.redoStack.length > 0) {
+        const nextState = active.redoStack.pop();
+        active.undoStack.push(nextState);
+        active.ctx.putImageData(nextState, 0, 0);
+        updateHistoryButtons();
+      }
+    }
+
+    function setActiveTool(tool) {
+      currentTool = tool;
+      [penBtn, highlighterBtn, eraserBtn].forEach(btn => btn.classList.remove('active'));
+      if (tool === 'pen') penBtn.classList.add('active');
+      else if (tool === 'highlighter') highlighterBtn.classList.add('active');
+      else if (tool === 'eraser') eraserBtn.classList.add('active');
+    }
+
+    function initCanvasSize() {
+      if (!pdfDoc) {
+        const width = Math.min(container.clientWidth - 40, 900);
+        const height = Math.min(container.clientHeight - 40, 1200);
+        
+        pdfCanvas.width = width;
+        pdfCanvas.height = height;
+        paintCanvas.width = width;
+        paintCanvas.height = height;
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+
+        pdfCtx.fillStyle = '#ffffff';
+        pdfCtx.fillRect(0, 0, width, height);
+      }
+    }
+
+    [paintCanvas, wbCanvas].forEach(c => {
+      c.addEventListener('mousedown', startDrawing);
+      c.addEventListener('mousemove', draw);
+      c.addEventListener('mouseup', stopDrawing);
+      c.addEventListener('mouseout', stopDrawing);
+
+      c.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e); });
+      c.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
+      c.addEventListener('touchend', stopDrawing);
+    });
+
+    penBtn.addEventListener('click', () => setActiveTool('pen'));
+    highlighterBtn.addEventListener('click', () => setActiveTool('highlighter'));
+    eraserBtn.addEventListener('click', () => setActiveTool('eraser'));
+
+    colorBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        colorBtns.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentColor = e.target.dataset.color;
+        if (currentTool === 'eraser') setActiveTool('pen');
+      });
+    });
+
+    sizeBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        sizeBtns.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentLineWidth = parseInt(e.target.dataset.size, 10);
+      });
+    });
+
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && currentMode === 'pdf') {
+        isSpacePressed = true;
+        container.classList.add('panning');
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z') {
+          if (e.shiftKey) redo();
+          else undo();
+        } else if (e.key === 'y') {
+          redo();
+        }
+        return;
+      }
+
+      if (document.activeElement === pageDirectInput) return;
+
+      if (currentMode === 'pdf') {
+        if (e.key === 'ArrowUp') {
+          if (container.scrollTop <= 0 && pdfDoc && pageNum > 1) {
+            pageNum--;
+            queueRenderPage(pageNum);
+            setTimeout(() => {
+              container.scrollTop = container.scrollHeight - container.clientHeight;
+            }, 100);
+          } else {
+            container.scrollTop -= 60;
+          }
+          e.preventDefault();
+        } else if (e.key === 'ArrowDown') {
+          const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 2;
+          if (isAtBottom && pdfDoc && pageNum < pdfDoc.numPages) {
+            pageNum++;
+            queueRenderPage(pageNum);
+          } else {
+            container.scrollTop += 60;
+          }
+          e.preventDefault();
+        }
+
+        if (pdfDoc) {
+          if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+            if (pageNum < pdfDoc.numPages) {
+              pageNum++;
+              queueRenderPage(pageNum);
+            }
+          } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+            if (pageNum > 1) {
+              pageNum--;
+              queueRenderPage(pageNum);
+            }
+          }
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space' && currentMode === 'pdf') {
+        isSpacePressed = false;
+        container.classList.remove('panning');
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      const active = getActiveContext();
+      if (currentMode === 'whiteboard') {
+        active.ctx.fillStyle = '#ffffff';
+        active.ctx.fillRect(0, 0, active.canvas.width, active.canvas.height);
+      } else {
+        active.ctx.clearRect(0, 0, active.canvas.width, active.canvas.height);
+      }
+      saveState();
+    });
+
+    // 🚀 페이지 로드 시 초기화 및 지정한 한글 PDF 자동 로드 실행
+    window.onload = () => {
+      initCanvasSize();
+      saveState();
+      
+      // 지정해둔 PDF 파일 자동 호출
+      loadPdfFromUrl(DEFAULT_PDF_URL);
+    };
+  </script>
+</body>
+</html>
